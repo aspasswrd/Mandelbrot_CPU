@@ -1,21 +1,19 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
-#include "stb_image_write.h"
 #include <SDL2/SDL.h>
 #include <iostream>
 #include <vector>
 #include <tuple>
-#include <gmpxx.h>
 
-const int WIDTH = 400;
-const int HEIGHT = 300;
-const int MAX_ITER = 1000;
+const int WIDTH = 1920;
+const int HEIGHT = 1080;
+const int MAX_ITER = 800;
 
 std::vector<std::tuple<uint8_t, uint8_t, uint8_t>> colorTable(MAX_ITER + 1);
 
-mpf_class offsetX("-0.705922586560551705765", 256);
-mpf_class offsetY("-0.267652025962102419929", 256);
-mpf_class zoom("0.5", 256);
-bool needsRedraw = false;
+long double offsetX = -0.705922586560551705765;
+long double offsetY = -0.267652025962102419929;
+long double zoom = 0.5;
+bool needsRedraw = true;
 
 void initColorTable() {
     for (int iter = 0; iter <= MAX_ITER; ++iter) {
@@ -27,24 +25,23 @@ void initColorTable() {
     }
 }
 
-int calculateMandelbrot(const mpf_class& cx, const mpf_class& cy, int max_iter) {
-    mpf_class zx = 0.0;
-    mpf_class zy = 0.0;
+int calculateMandelbrot(const long double& cx, const long double& cy, int max_iter) {
+    long double zx = 0.0;
+    long double zy = 0.0;
     int iter = 0;
 
-    // Оптимизация для главной кардиоиды и круга
-    mpf_class q = (cx - 0.25) * (cx - 0.25) + cy * cy;
+    long double q = (cx - 0.25) * (cx - 0.25) + cy * cy;
     if (q * (q + (cx - 0.25)) <= 0.25 * cy * cy ||
         (cx + 1.0) * (cx + 1.0) + cy * cy <= 0.0625) {
         return max_iter;
     }
 
     while (iter < max_iter) {
-        mpf_class zx2 = zx * zx;
-        mpf_class zy2 = zy * zy;
+        long double zx2 = zx * zx;
+        long double zy2 = zy * zy;
         if (zx2 + zy2 > 4.0) break;
 
-        mpf_class tmp = zx2 - zy2 + cx;
+        long double tmp = zx2 - zy2 + cx;
         zy = 2.0 * zx * zy + cy;
         zx = tmp;
         iter++;
@@ -53,14 +50,14 @@ int calculateMandelbrot(const mpf_class& cx, const mpf_class& cy, int max_iter) 
 }
 
 void generateMandelbrot(std::vector<uint8_t>& image) {
-    mpf_class scaleX = 3.5 / WIDTH / zoom;
-    mpf_class scaleY = 2.0 / HEIGHT / zoom;
+    long double scaleX = 3.5 / WIDTH / zoom;
+    long double scaleY = 2.0 / HEIGHT / zoom;
 
-    #pragma omp parallel for collapse(2) schedule(dynamic)
+    #pragma omp parallel for collapse(2) schedule(static)
     for (int y = 0; y < HEIGHT; y++) {
         for (int x = 0; x < WIDTH; x++) {
-            mpf_class cx = (x - WIDTH / 2) * scaleX + offsetX;
-            mpf_class cy = (y - HEIGHT / 2) * scaleY + offsetY;
+            long double cx = (x - WIDTH / 2) * scaleX + offsetX;
+            long double cy = (y - HEIGHT / 2) * scaleY + offsetY;
 
             int iter = calculateMandelbrot(cx, cy, MAX_ITER);
 
@@ -74,8 +71,6 @@ void generateMandelbrot(std::vector<uint8_t>& image) {
 }
 
 int main() {
-    mpf_set_default_prec(256); // Установка точности
-
     if (SDL_Init(SDL_INIT_VIDEO) < 0) {
         std::cerr << "SDL could not initialize! SDL_Error: " << SDL_GetError() << std::endl;
         return -1;
@@ -111,29 +106,29 @@ int main() {
             } else if (e.type == SDL_KEYDOWN) {
                 switch (e.key.keysym.sym) {
                     case SDLK_w:
-                        offsetY -= (0.1f / zoom);
-                    needsRedraw = true;
-                    break;
+                        offsetY -= (0.1L / zoom);
+                        needsRedraw = true;
+                        break;
                     case SDLK_s:
-                        offsetY += (0.1f / zoom);
-                    needsRedraw = true;
-                    break;
+                        offsetY += (0.1L / zoom);
+                        needsRedraw = true;
+                        break;
                     case SDLK_a:
-                        offsetX -= (0.1f / zoom);
-                    needsRedraw = true;
-                    break;
+                        offsetX -= (0.1L / zoom);
+                        needsRedraw = true;
+                        break;
                     case SDLK_d:
-                        offsetX += (0.1f / zoom);
-                    needsRedraw = true;
-                    break;
+                        offsetX += (0.1L / zoom);
+                        needsRedraw = true;
+                        break;
                     case SDLK_e:
-                        zoom *= 1.1f;
-                    needsRedraw = true;
-                    break;
+                        zoom *= 1.05L;
+                        needsRedraw = true;
+                        break;
                     case SDLK_q:
-                        zoom /= 1.1f;
-                    needsRedraw = true;
-                    break;
+                        zoom /= 1.05L;
+                        needsRedraw = true;
+                        break;
                 }
             }
         }
