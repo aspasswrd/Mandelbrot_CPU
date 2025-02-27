@@ -1,0 +1,4 @@
+cmake-build-avx
+cmake-build-default
+cmake-build-high_precision
+.idea
