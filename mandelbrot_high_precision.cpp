@@ -3,21 +3,25 @@
 #include <iostream>
 #include <vector>
 #include <tuple>
+#include <boost/multiprecision/cpp_bin_float.hpp>
 
-const int WIDTH = 1920;
-const int HEIGHT = 1080;
-const int MAX_ITER = 800;
+using namespace boost::multiprecision;
+using high_precision = cpp_bin_float_100;
+
+const int WIDTH = 200;
+const int HEIGHT = 200;
+const int MAX_ITER = 1200;
 
 std::vector<std::tuple<uint8_t, uint8_t, uint8_t>> colorTable(MAX_ITER + 1);
 
-long double offsetX = -0.705922586560551705765;
-long double offsetY = -0.267652025962102419929;
-long double zoom = 0.5;
+high_precision offsetX("-0.705922586560551705765");
+high_precision offsetY("-0.267652025962102419929");
+high_precision zoom("0.5");
 bool needsRedraw = true;
 
 void initColorTable() {
     for (int iter = 0; iter <= MAX_ITER; ++iter) {
-        long double t = static_cast<long double>(iter) / MAX_ITER;
+        double t = static_cast<double>(iter) / MAX_ITER;
         uint8_t r = static_cast<uint8_t>(9 * (1 - t) * t * t * t * 255);
         uint8_t g = static_cast<uint8_t>(15 * (1 - t) * (1 - t) * t * t * 255);
         uint8_t b = static_cast<uint8_t>(8.5 * (1 - t) * (1 - t) * (1 - t) * t * 255);
@@ -25,41 +29,41 @@ void initColorTable() {
     }
 }
 
-int calculateMandelbrot(const long double& cx, const long double& cy, int max_iter) {
-    long double zx = 0.0;
-    long double zy = 0.0;
+int calculateMandelbrotHighPrecision(const high_precision& cx, const high_precision& cy) {
+    high_precision zx = 0;
+    high_precision zy = 0;
     int iter = 0;
 
-    long double q = (cx - 0.25) * (cx - 0.25) + cy * cy;
-    if (q * (q + (cx - 0.25)) <= 0.25 * cy * cy ||
-        (cx + 1.0) * (cx + 1.0) + cy * cy <= 0.0625) {
-        return max_iter;
+    high_precision q = pow(cx - 0.25, 2) + pow(cy, 2);
+    if (q * (q + (cx - 0.25)) <= 0.25 * pow(cy, 2) ||
+        pow(cx + 1, 2) + pow(cy, 2) <= 0.0625) {
+        return MAX_ITER;
     }
 
-    while (iter < max_iter) {
-        long double zx2 = zx * zx;
-        long double zy2 = zy * zy;
-        if (zx2 + zy2 > 4.0) break;
+    while (iter < MAX_ITER) {
+        high_precision zx2 = zx * zx;
+        high_precision zy2 = zy * zy;
+        if (zx2 + zy2 > 4) break;
 
-        long double tmp = zx2 - zy2 + cx;
-        zy = 2.0 * zx * zy + cy;
+        high_precision tmp = zx2 - zy2 + cx;
+        zy = 2 * zx * zy + cy;
         zx = tmp;
         iter++;
     }
     return iter;
 }
 
-void generateMandelbrot(std::vector<uint8_t>& image) {
-    long double scaleX = 3.5 / WIDTH / zoom;
-    long double scaleY = 2.0 / HEIGHT / zoom;
+void generateMandelbrotHighPrecision(std::vector<uint8_t>& image) {
+    high_precision scaleX = 3.5 / (WIDTH * zoom);
+    high_precision scaleY = 2.0 / (HEIGHT * zoom);
 
     #pragma omp parallel for collapse(2) schedule(static)
     for (int y = 0; y < HEIGHT; y++) {
         for (int x = 0; x < WIDTH; x++) {
-            long double cx = (x - WIDTH / 2) * scaleX + offsetX;
-            long double cy = (y - HEIGHT / 2) * scaleY + offsetY;
+            high_precision cx = (x - WIDTH/2) * scaleX + offsetX;
+            high_precision cy = (y - HEIGHT/2) * scaleY + offsetY;
 
-            int iter = calculateMandelbrot(cx, cy, MAX_ITER);
+            int iter = calculateMandelbrotHighPrecision(cx, cy);
 
             auto [r, g, b] = colorTable[iter];
             int idx = (y * WIDTH + x) * 3;
@@ -122,11 +126,17 @@ int main() {
                         needsRedraw = true;
                         break;
                     case SDLK_e:
-                        zoom *= 1.05L;
+                        zoom *= high_precision("1.05");
                         needsRedraw = true;
                         break;
                     case SDLK_q:
-                        zoom /= 1.05L;
+                        zoom /= high_precision("1.05");
+                        needsRedraw = true;
+                        break;
+                    case SDLK_r:  // Сброс масштаба
+                        zoom = 0.5;
+                        offsetX = -0.705922586560551705765;
+                        offsetY = -0.267652025962102419929;
                         needsRedraw = true;
                         break;
                 }
@@ -134,7 +144,7 @@ int main() {
         }
 
         if (needsRedraw) {
-            generateMandelbrot(image);
+            generateMandelbrotHighPrecision(image);
             needsRedraw = false;
         }
 

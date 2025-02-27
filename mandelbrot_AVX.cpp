@@ -3,21 +3,22 @@
 #include <iostream>
 #include <vector>
 #include <tuple>
+#include <immintrin.h>
 
 const int WIDTH = 1920;
 const int HEIGHT = 1080;
-const int MAX_ITER = 800;
+const int MAX_ITER = 1200;
 
 std::vector<std::tuple<uint8_t, uint8_t, uint8_t>> colorTable(MAX_ITER + 1);
 
-long double offsetX = -0.705922586560551705765;
-long double offsetY = -0.267652025962102419929;
-long double zoom = 0.5;
+double offsetX = -0.705922586560551705765;
+double offsetY = -0.267652025962102419929;
+double zoom = 0.5;
 bool needsRedraw = true;
 
 void initColorTable() {
     for (int iter = 0; iter <= MAX_ITER; ++iter) {
-        long double t = static_cast<long double>(iter) / MAX_ITER;
+        double t = static_cast<double>(iter) / MAX_ITER;
         uint8_t r = static_cast<uint8_t>(9 * (1 - t) * t * t * t * 255);
         uint8_t g = static_cast<uint8_t>(15 * (1 - t) * (1 - t) * t * t * 255);
         uint8_t b = static_cast<uint8_t>(8.5 * (1 - t) * (1 - t) * (1 - t) * t * 255);
@@ -25,50 +26,65 @@ void initColorTable() {
     }
 }
 
-int calculateMandelbrot(const long double& cx, const long double& cy, int max_iter) {
-    long double zx = 0.0;
-    long double zy = 0.0;
-    int iter = 0;
+// Векторизованная версия функции
+__attribute__((target("avx2")))
+void calculateMandelbrotAVX(__m256d* cx, __m256d* cy, int* results) {
+    __m256d zx = _mm256_setzero_pd();
+    __m256d zy = _mm256_setzero_pd();
+    __m256i iter = _mm256_setzero_si256();
+    __m256i mask = _mm256_setzero_si256();
 
-    long double q = (cx - 0.25) * (cx - 0.25) + cy * cy;
-    if (q * (q + (cx - 0.25)) <= 0.25 * cy * cy ||
-        (cx + 1.0) * (cx + 1.0) + cy * cy <= 0.0625) {
-        return max_iter;
-    }
+    for (int i = 0; i < MAX_ITER; ++i) {
+        __m256d zx2 = _mm256_mul_pd(zx, zx);
+        __m256d zy2 = _mm256_mul_pd(zy, zy);
+        __m256d r2 = _mm256_add_pd(zx2, zy2);
+        __m256d cmp = _mm256_cmp_pd(r2, _mm256_set1_pd(4.0), _CMP_LT_OQ);
 
-    while (iter < max_iter) {
-        long double zx2 = zx * zx;
-        long double zy2 = zy * zy;
-        if (zx2 + zy2 > 4.0) break;
+        mask = _mm256_castpd_si256(cmp);
+        if (_mm256_testz_si256(mask, mask)) break;
 
-        long double tmp = zx2 - zy2 + cx;
-        zy = 2.0 * zx * zy + cy;
+        __m256d tmp = _mm256_add_pd(_mm256_sub_pd(zx2, zy2), *cx);
+        zy = _mm256_add_pd(_mm256_mul_pd(_mm256_set1_pd(2.0), _mm256_mul_pd(zx, zy)), *cy);
         zx = tmp;
-        iter++;
+
+        iter = _mm256_sub_epi64(iter, _mm256_castpd_si256(cmp));
     }
-    return iter;
+
+    _mm256_storeu_si256((__m256i*)results, iter);
 }
 
 void generateMandelbrot(std::vector<uint8_t>& image) {
-    long double scaleX = 3.5 / WIDTH / zoom;
-    long double scaleY = 2.0 / HEIGHT / zoom;
+    double scaleX = 3.5 / (WIDTH * zoom);
+    double scaleY = 2.0 / (HEIGHT * zoom);
 
-    #pragma omp parallel for collapse(2) schedule(static)
+    #pragma omp parallel for schedule(static)
     for (int y = 0; y < HEIGHT; y++) {
-        for (int x = 0; x < WIDTH; x++) {
-            long double cx = (x - WIDTH / 2) * scaleX + offsetX;
-            long double cy = (y - HEIGHT / 2) * scaleY + offsetY;
+        for (int x = 0; x < WIDTH; x += 4) {  // Обрабатываем 4 точки за итерацию
+            double cx[4], cy[4];
+            for (int i = 0; i < 4; i++) {
+                int xx = x + i;
+                cx[i] = (xx - WIDTH/2) * scaleX + offsetX;
+                cy[i] = (y - HEIGHT/2) * scaleY + offsetY;
+            }
 
-            int iter = calculateMandelbrot(cx, cy, MAX_ITER);
+            __m256d vcx = _mm256_loadu_pd(cx);
+            __m256d vcy = _mm256_loadu_pd(cy);
+            int results[4];
+            calculateMandelbrotAVX(&vcx, &vcy, results);
 
-            auto [r, g, b] = colorTable[iter];
-            int idx = (y * WIDTH + x) * 3;
-            image[idx] = r;
-            image[idx + 1] = g;
-            image[idx + 2] = b;
+            for (int i = 0; i < 4; i++) {
+                if (x + i >= WIDTH) break;
+                auto [r, g, b] = colorTable[results[i]];
+                int idx = (y * WIDTH + x + i) * 3;
+                image[idx] = r;
+                image[idx + 1] = g;
+                image[idx + 2] = b;
+            }
         }
     }
 }
+
+// Остальной код остается без изменений
 
 int main() {
     if (SDL_Init(SDL_INIT_VIDEO) < 0) {
