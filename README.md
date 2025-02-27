@@ -1,3 +1,5 @@
+[![Beta](https://img.shields.io/badge/Status-Beta-orange)](https://github.com/aspasswrd/Mandelbrot_CPU/releases/tag/beta1.0)  
+
 # Mandelbrot_CPU
 Rendering the Mandelbrot Set on CPU with Dynamic Zooming
 
