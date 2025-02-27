@@ -1,4 +1,3 @@
-#define STB_IMAGE_WRITE_IMPLEMENTATION
 #include <SDL2/SDL.h>
 #include <iostream>
 #include <vector>
