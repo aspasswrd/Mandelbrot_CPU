@@ -3,45 +3,62 @@ project(mandelbrot)
 
 set(CMAKE_CXX_STANDARD 26)
 
-# Опция для выбора версии
-set(VERSION "DEFAULT" CACHE STRING "Выбор версии (DEFAULT|AVX|HIGH_PRECISION)")
+# Version selection
+set(VERSION "DEFAULT" CACHE STRING "Build version (DEFAULT|AVX|HIGH_PRECISION)")
 
-# Общие зависимости
+# Common dependencies
 find_package(SDL2 REQUIRED)
 find_package(OpenMP REQUIRED)
 
-# Общие настройки
+# Common settings
 add_executable(mandelbrot)
 target_include_directories(mandelbrot PRIVATE ${SDL2_INCLUDE_DIRS})
 target_link_libraries(mandelbrot PRIVATE ${SDL2_LIBRARIES} OpenMP::OpenMP_CXX)
 
-# Общие флаги оптимизации
-target_compile_options(mandelbrot PRIVATE -O3 -ffast-math -funroll-loops)
+# Portable optimization flags
+target_compile_options(mandelbrot PRIVATE
+        -O3
+        -ffast-math
+        -funroll-loops
+        -ftree-vectorize
+)
 
-# Настройки для разных версий
+# Version-specific configurations
 if(VERSION STREQUAL "DEFAULT")
-    message(STATUS "Сборка стандартной версии")
+    message(STATUS "Building default version")
     target_sources(mandelbrot PRIVATE mandelbrot.cpp)
-    target_compile_options(mandelbrot PRIVATE -ftree-vectorize)
 
 elseif(VERSION STREQUAL "AVX")
-    message(STATUS "Сборка AVX-оптимизированной версии")
+    message(STATUS "Building AVX-optimized version")
     target_sources(mandelbrot PRIVATE mandelbrot_AVX.cpp)
-    target_compile_options(mandelbrot PRIVATE
-            -mavx2 -msse4.2 -mfma -march=native
-    )
+
+    # AVX flags with compatibility check
+    include(CheckCXXCompilerFlag)
+    check_cxx_compiler_flag(-mavx2 AVX2_SUPPORTED)
+    if(AVX2_SUPPORTED)
+        target_compile_options(mandelbrot PRIVATE -mavx2)
+    else()
+        message(WARNING "AVX2 not supported - using generic optimizations")
+    endif()
 
 elseif(VERSION STREQUAL "HIGH_PRECISION")
-    message(STATUS "Сборка высокоточной версии с Boost")
+    message(STATUS "Building high-precision version with Boost")
     target_sources(mandelbrot PRIVATE mandelbrot_high_precision.cpp)
     find_package(Boost REQUIRED)
     target_include_directories(mandelbrot PRIVATE ${Boost_INCLUDE_DIRS})
     target_compile_definitions(mandelbrot PRIVATE BOOST_ALL_NO_LIB)
 
 else()
-    message(FATAL_ERROR "Неизвестная версия: ${VERSION}. Допустимые значения: DEFAULT|AVX|HIGH_PRECISION")
+    message(FATAL_ERROR "Unknown version: ${VERSION}. Valid options: DEFAULT|AVX|HIGH_PRECISION")
 endif()
 
-# Общие флаги для всех версий
+# Common flags for all versions
 target_compile_options(mandelbrot PRIVATE ${OpenMP_CXX_FLAGS})
 target_link_options(mandelbrot PRIVATE ${OpenMP_CXX_FLAGS})
+
+# Portable architecture flags
+if(NOT CMAKE_SYSTEM_PROCESSOR)
+    set(CMAKE_SYSTEM_PROCESSOR "x86_64")
+endif()
+
+message(STATUS "Building for ${CMAKE_SYSTEM_PROCESSOR} architecture")
