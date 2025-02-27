@@ -4,8 +4,8 @@
 #include <vector>
 #include <tuple>
 
-const int WIDTH = 1920;
-const int HEIGHT = 1080;
+const int WIDTH = 800;
+const int HEIGHT = 600;
 const int MAX_ITER = 800;
 
 std::vector<std::tuple<uint8_t, uint8_t, uint8_t>> colorTable(MAX_ITER + 1);

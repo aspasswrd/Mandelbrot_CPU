@@ -6,9 +6,8 @@ set(CMAKE_CXX_STANDARD 26)
 find_package(SDL2 REQUIRED)
 find_package(OpenMP REQUIRED)
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -march=native -ffast-math -lSDL2")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -fopenmp -ffast-math -lSDL2 -march=znver3 -ftree-vectorize -funroll-loops -msse4.2 -mavx2")
 
-# Добавляем исходный файл
 add_executable(mandelbrot mandelbrot.cpp)
 
 target_compile_options(mandelbrot PRIVATE ${OpenMP_CXX_FLAGS})
